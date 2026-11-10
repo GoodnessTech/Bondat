@@ -28,6 +28,7 @@ import {
 import {
   BOT_CHAIN_MAINNET,
   CONTRACT_CONFIG,
+  getExplorerAddressUrl,
 } from './config/chain';
 import { BlockchainService } from './services/web3';
 import type { Page, ServiceCategory } from './types';
@@ -332,7 +333,14 @@ function HomePage({ go }: { go: (page: Page) => void }) {
             <div className="hero-note">
               <span className="pulse-dot" /> Live on BOT Chain Mainnet (Chain ID 677)
               <span className="note-separator" />
-              <span>Contract address pending deployment</span>
+              <a
+                href={getExplorerAddressUrl(CONTRACT_CONFIG.address)}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: 'var(--terra)', textDecoration: 'underline' }}
+              >
+                Contract: {BlockchainService.shortenAddress(CONTRACT_CONFIG.address)}
+              </a>
             </div>
           </div>
           <div className="hero-art">
@@ -555,12 +563,21 @@ function DashboardPage({
         </div>
       </div>
 
-      <div className="integration-notice">
-        <Info size={18} />
+      <div className="integration-notice" style={{ background: 'rgba(92, 123, 86, 0.08)', borderColor: '#5c7b56' }}>
+        <CheckCircle2 size={18} style={{ color: '#5c7b56' }} />
         <div>
-          <strong>BOT Chain Mainnet Readiness</strong>
+          <strong style={{ color: '#2b4d24' }}>BondatCore Live on BOT Chain Mainnet</strong>
           <p>
-            Target Chain ID: {BOT_CHAIN_MAINNET.chainId} ({BOT_CHAIN_MAINNET.chainName}). The official smart contract address is currently pending deployment. All balances and states below represent live chain data without simulation.
+            Official Contract:{' '}
+            <a
+              href={getExplorerAddressUrl(CONTRACT_CONFIG.address)}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: 'var(--terra)', fontWeight: 700 }}
+            >
+              {CONTRACT_CONFIG.address} <ExternalLink size={12} style={{ display: 'inline' }} />
+            </a>
+            {' '}· Block {CONTRACT_CONFIG.blockNumber} · Chain ID {BOT_CHAIN_MAINNET.chainId}
           </p>
         </div>
       </div>
@@ -648,7 +665,12 @@ function AgentsPage({ go, toast }: { go: (page: Page) => void; toast: (msg: stri
       slaWindowHours: 24,
     });
 
-    toast(res.message, 'info');
+    if (res.success) {
+      toast(res.message, 'success');
+      setShowForm(false);
+    } else {
+      toast(res.message, 'error');
+    }
   };
 
   const computedHash = name ? BlockchainService.generateAgentMetadataHash(name, category, description) : 'Generated on registration';
@@ -941,8 +963,12 @@ function MarketplacePage({ go, toast }: { go: (page: Page) => void; toast: (msg:
     }
     setError('');
 
-    const res = await BlockchainService.purchaseCoverage('agent-ref', numAmount, deadline);
-    toast(res.message, 'info');
+    const res = await BlockchainService.purchaseCoverage(1, numAmount, deadline);
+    if (res.success) {
+      toast(res.message, 'success');
+    } else {
+      toast(res.message, 'error');
+    }
   };
 
   return (
@@ -963,7 +989,7 @@ function MarketplacePage({ go, toast }: { go: (page: Page) => void; toast: (msg:
           </div>
           <h3>No eligible agents yet</h3>
           <p>
-            Agents with deposited collateral will appear here when ready to accept coverage. The protocol contract deployment on BOT Chain Mainnet is pending.
+            Agents with deposited collateral will appear here when ready to accept coverage. The protocol contract is live at {BlockchainService.shortenAddress(CONTRACT_CONFIG.address)} on BOT Chain Mainnet.
           </p>
           <div style={{ marginTop: 20 }}>
             <button className="button button-dark" onClick={() => go('coverage-details')}>
@@ -1162,7 +1188,12 @@ function ClaimsPage({ go, toast }: { go: (page: Page) => void; toast: (msg: stri
       claimAmountBot: '0',
     });
 
-    toast(res.message, 'info');
+    if (res.success) {
+      toast(res.message, 'success');
+      setShowClaimForm(false);
+    } else {
+      toast(res.message, 'error');
+    }
   };
 
   return (
@@ -1296,7 +1327,7 @@ function DocsPage() {
     { id: 'doc-4', num: '05', title: 'Protocol fees', content: 'Fees are displayed before a policy is purchased (standard protocol fee: 1.5%). All fees are denominated in BOT on BOT Chain. The final fee schedule will be anchored to the verified smart contract deployment.' },
     { id: 'doc-5', num: '06', title: 'Risks & limitations', content: 'Coverage is not a guarantee that every real-world dispute can be objectively assessed. Customers should understand the commitment definition, evidence requirements, claim window, smart contract risk, and BOT Chain network dynamics before purchasing.' },
     { id: 'doc-6', num: '07', title: 'The arbitrator', content: 'When a claim requires review, the designated arbitrator evaluates the commitment and submitted evidence under the policy’s deterministic rules. The arbitrator cannot alter the original coverage terms or modify locked collateral.' },
-    { id: 'doc-7', num: '08', title: 'BOT Chain Mainnet verification', content: `Bondat is prepared for deployment on BOT Chain Mainnet (Chain ID 677, RPC: ${BOT_CHAIN_MAINNET.rpcUrl}). The official contract address and verified source will be published here once the deployment is finalized. Until then, no contract address is represented by this interface.` },
+    { id: 'doc-7', num: '08', title: 'BOT Chain Mainnet verification', content: `BondatCore is deployed on BOT Chain Mainnet (Chain ID 677, RPC: ${BOT_CHAIN_MAINNET.rpcUrl}). Official verified contract address: ${CONTRACT_CONFIG.address}. Verified deployment transaction: ${CONTRACT_CONFIG.deploymentTxHash} at block ${CONTRACT_CONFIG.blockNumber}.` },
   ];
 
   return (

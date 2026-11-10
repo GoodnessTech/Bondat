@@ -2,7 +2,7 @@
  * BONDAT Protocol — Web3 & Blockchain Service
  *
  * Encapsulates all reads and writes for BOT Chain Mainnet (Chain ID 677).
- * Keeps UI components strictly decoupled from blockchain provider logic.
+ * Connects directly to the live verified BondatCore contract on BOT Chain.
  */
 
 import { BOT_CHAIN_MAINNET, CONTRACT_CONFIG } from '../config/chain';
@@ -59,7 +59,6 @@ export class BlockchainService {
 
   /**
    * Switch wallet network to BOT Chain Mainnet (Chain ID 677 / 0x2a5).
-   * Prompts user to add the network if not registered in wallet.
    */
   static async switchToBotChain(): Promise<boolean> {
     if (!this.hasProvider()) {
@@ -144,18 +143,291 @@ export class BlockchainService {
     }
   }
 
+  // --- ABI CALL HELPERS ---
+
+  private static toBytes32(hexOrStr: string): string {
+    const clean = hexOrStr.startsWith('0x') ? hexOrStr.slice(2) : hexOrStr;
+    return clean.padEnd(64, '0').slice(0, 64);
+  }
+
+  private static toUint256Hex(val: bigint | number | string): string {
+    const bn = BigInt(val);
+    return bn.toString(16).padStart(64, '0');
+  }
+
+  private static toWei(amountBot: string | number): bigint {
+    const numStr = String(amountBot).trim();
+    if (!numStr || isNaN(Number(numStr))) return 0n;
+    const parts = numStr.split('.');
+    const whole = BigInt(parts[0] || '0') * 10n ** 18n;
+    let fraction = 0n;
+    if (parts[1]) {
+      const decimals = parts[1].padEnd(18, '0').slice(0, 18);
+      fraction = BigInt(decimals);
+    }
+    return whole + fraction;
+  }
+
   /**
-   * Smart Contract Interaction Status:
-   * Explicitly informs caller that smart contract deployment is pending.
+   * Send Transaction to Contract
    */
-  static isContractReady(): boolean {
-    return Boolean(CONTRACT_CONFIG.isDeployed && CONTRACT_CONFIG.address);
+  private static async sendTx(data: string, valueWei: bigint = 0n): Promise<string> {
+    if (!this.hasProvider()) {
+      throw new Error('Please connect your Web3 wallet.');
+    }
+    const accounts = (await window.ethereum!.request({ method: 'eth_accounts' })) as string[];
+    if (!accounts || accounts.length === 0) {
+      throw new Error('No authorized wallet account.');
+    }
+
+    const txParams: Record<string, unknown> = {
+      from: accounts[0],
+      to: CONTRACT_CONFIG.address,
+      data,
+    };
+    if (valueWei > 0n) {
+      txParams.value = '0x' + valueWei.toString(16);
+    }
+
+    const txHash = (await window.ethereum!.request({
+      method: 'eth_sendTransaction',
+      params: [txParams],
+    })) as string;
+
+    return txHash;
+  }
+
+  // --- REAL ON-CHAIN CONTRACT WRITES ---
+
+  /**
+   * Register an Agent on BOT Chain
+   * Method: registerAgent(bytes32) -> 0xb19b03a1
+   */
+  static async registerAgent(
+    agent: Omit<AgentRecord, 'id' | 'metadataHash' | 'activePolicies' | 'isRegisteredOnChain'>
+  ): Promise<{ success: boolean; message: string; txHash?: string }> {
+    try {
+      const metaHash = this.generateAgentMetadataHash(agent.name, agent.category, agent.description);
+      const data = '0xb19b03a1' + this.toBytes32(metaHash);
+      const valueWei = this.toWei(agent.collateralPledged || '0');
+
+      const txHash = await this.sendTx(data, valueWei);
+      return {
+        success: true,
+        message: `Agent registered on BOT Chain Mainnet! TX: ${this.shortenAddress(txHash)}`,
+        txHash,
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        success: false,
+        message: `Registration failed: ${msg}`,
+      };
+    }
+  }
+
+  /**
+   * Deposit Additional Collateral
+   * Method: depositCollateral(uint32) -> 0x8a1ebc1c
+   */
+  static async depositCollateral(
+    agentId: number,
+    amountBot: string
+  ): Promise<{ success: boolean; message: string; txHash?: string }> {
+    try {
+      const data = '0x8a1ebc1c' + this.toUint256Hex(agentId);
+      const valueWei = this.toWei(amountBot);
+
+      const txHash = await this.sendTx(data, valueWei);
+      return {
+        success: true,
+        message: `Deposited ${amountBot} BOT collateral! TX: ${this.shortenAddress(txHash)}`,
+        txHash,
+      };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        message: `Deposit failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  /**
+   * Withdraw Available Collateral
+   * Method: withdrawAvailableCollateral(uint32,uint128) -> 0x0a4e2080
+   */
+  static async withdrawAvailableCollateral(
+    agentId: number,
+    amountBot: string
+  ): Promise<{ success: boolean; message: string; txHash?: string }> {
+    try {
+      const amountWei = this.toWei(amountBot);
+      const data = '0x0a4e2080' + this.toUint256Hex(agentId) + this.toUint256Hex(amountWei);
+
+      const txHash = await this.sendTx(data, 0n);
+      return {
+        success: true,
+        message: `Withdrew ${amountBot} BOT collateral! TX: ${this.shortenAddress(txHash)}`,
+        txHash,
+      };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        message: `Withdrawal failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  /**
+   * Purchase Coverage Policy
+   * Method: purchaseCoverage(uint32,bytes32,uint128,uint64,uint32) -> 0x3f88ce77
+   */
+  static async purchaseCoverage(
+    agentId: number,
+    coverageAmountBot: number,
+    deadlineDate: string
+  ): Promise<{ success: boolean; message: string; txHash?: string }> {
+    try {
+      const commitmentHash = this.generateAgentMetadataHash('policy', String(agentId), deadlineDate);
+      const coverageWei = this.toWei(coverageAmountBot);
+      const deadlineSec = deadlineDate ? Math.floor(new Date(deadlineDate).getTime() / 1000) : Math.floor(Date.now() / 1000) + 86400;
+      const claimWindowSec = 259200; // 72 hours
+
+      // 5% standard premium
+      const premiumWei = (coverageWei * 500n) / 10000n;
+
+      const data =
+        '0x3f88ce77' +
+        this.toUint256Hex(agentId) +
+        this.toBytes32(commitmentHash) +
+        this.toUint256Hex(coverageWei) +
+        this.toUint256Hex(deadlineSec) +
+        this.toUint256Hex(claimWindowSec);
+
+      const txHash = await this.sendTx(data, premiumWei);
+      return {
+        success: true,
+        message: `Coverage policy purchased on BOT Chain Mainnet! TX: ${this.shortenAddress(txHash)}`,
+        txHash,
+      };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        message: `Purchase failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  /**
+   * Submit Claim with Evidence Hash
+   * Method: fileClaim(uint32,uint8,bytes32) -> 0x455dc804
+   */
+  static async submitClaim(
+    claim: ClaimSubmission
+  ): Promise<{ success: boolean; message: string; txHash?: string }> {
+    try {
+      const policyIdNum = parseInt(claim.policyId, 10) || 1;
+      let reasonCode = 0; // MISSED_DELIVERY
+      if (claim.failureReason === 'Invalid output') reasonCode = 1;
+      else if (claim.failureReason === 'Service downtime') reasonCode = 2;
+
+      const cleanEvidence = claim.evidenceHash.startsWith('0x') ? claim.evidenceHash.slice(2) : claim.evidenceHash;
+      const data =
+        '0x455dc804' +
+        this.toUint256Hex(policyIdNum) +
+        this.toUint256Hex(reasonCode) +
+        this.toBytes32(cleanEvidence);
+
+      const txHash = await this.sendTx(data, 0n);
+      return {
+        success: true,
+        message: `Claim filed on BOT Chain Mainnet! TX: ${this.shortenAddress(txHash)}`,
+        txHash,
+      };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        message: `Claim submission failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  /**
+   * Submit Agent Service Evidence
+   * Method: submitEvidence(uint32,bytes32) -> 0x93e6c891
+   */
+  static async submitEvidence(
+    policyId: number,
+    evidenceHash: string
+  ): Promise<{ success: boolean; message: string; txHash?: string }> {
+    try {
+      const data = '0x93e6c891' + this.toUint256Hex(policyId) + this.toBytes32(evidenceHash);
+      const txHash = await this.sendTx(data, 0n);
+      return {
+        success: true,
+        message: `Evidence submitted! TX: ${this.shortenAddress(txHash)}`,
+        txHash,
+      };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        message: `Evidence submission failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  /**
+   * Customer Confirms Successful Service
+   * Method: confirmService(uint32) -> 0xa18c774c
+   */
+  static async confirmService(
+    policyId: number
+  ): Promise<{ success: boolean; message: string; txHash?: string }> {
+    try {
+      const data = '0xa18c774c' + this.toUint256Hex(policyId);
+      const txHash = await this.sendTx(data, 0n);
+      return {
+        success: true,
+        message: `Service confirmed and collateral released! TX: ${this.shortenAddress(txHash)}`,
+        txHash,
+      };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        message: `Confirmation failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  // --- READ-ONLY CONTRACT QUERIES ---
+
+  /**
+   * Query contract for total registered agents
+   */
+  static async getNextAgentId(): Promise<number> {
+    try {
+      const res = await fetch(BOT_CHAIN_MAINNET.rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_call',
+          params: [{ to: CONTRACT_CONFIG.address, data: '0x30efc498' }, 'latest'],
+          id: 1,
+        }),
+      });
+      const data = await res.json();
+      if (data?.result) {
+        return parseInt(data.result, 16);
+      }
+      return 0;
+    } catch {
+      return 0;
+    }
   }
 
   /**
    * Prepare Agent Metadata Hash
-   * Separation of concerns: Generates the deterministic metadata payload
-   * ready for contract ingestion.
    */
   static generateAgentMetadataHash(name: string, category: string, description: string): string {
     const input = `${name.trim()}|${category}|${description.trim()}`;
@@ -164,71 +436,6 @@ export class BlockchainService {
       hash = (hash * 31 + input.charCodeAt(i)) % 0xffffffff;
     }
     return '0x' + hash.toString(16).padStart(8, '0').repeat(8).slice(0, 64);
-  }
-
-  /**
-   * Register an Agent on BOT Chain
-   * Decoupled reads/writes: Dispatches to contract if deployed, or returns honest status.
-   */
-  static async registerAgent(
-    agent: Omit<AgentRecord, 'id' | 'metadataHash' | 'activePolicies' | 'isRegisteredOnChain'>
-  ): Promise<{ success: boolean; message: string; txHash?: string }> {
-    void agent;
-    if (!this.isContractReady()) {
-      return {
-        success: false,
-        message: 'BONDAT protocol contract deployment is pending on BOT Chain Mainnet. Registration payload is ready for broadcast once the contract address is linked.',
-      };
-    }
-
-    return {
-      success: false,
-      message: 'Contract interaction pending deployment verification.',
-    };
-  }
-
-  /**
-   * Purchase Coverage Policy
-   */
-  static async purchaseCoverage(
-    agentId: string,
-    amountBot: number,
-    deadlineDate: string
-  ): Promise<{ success: boolean; message: string; policyId?: string }> {
-    void agentId;
-    void amountBot;
-    void deadlineDate;
-    if (!this.isContractReady()) {
-      return {
-        success: false,
-        message: 'Contract deployment is pending on BOT Chain Mainnet. Policy underwriting will activate once the verified contract is live.',
-      };
-    }
-
-    return {
-      success: false,
-      message: 'Contract pending deployment.',
-    };
-  }
-
-  /**
-   * Submit Claim with Evidence Hash
-   */
-  static async submitClaim(
-    claim: ClaimSubmission
-  ): Promise<{ success: boolean; message: string; claimId?: string }> {
-    void claim;
-    if (!this.isContractReady()) {
-      return {
-        success: false,
-        message: 'Claims resolution contract is pending deployment on BOT Chain Mainnet. Evidence hash recorded for submission upon contract launch.',
-      };
-    }
-
-    return {
-      success: false,
-      message: 'Contract pending deployment.',
-    };
   }
 
   /**

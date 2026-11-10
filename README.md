@@ -5,97 +5,92 @@
 
 ---
 
-## Overview
-
-As autonomous AI agents execute high-value tasks, service certainty becomes the bedrock of the machine economy. **BONDAT** is a decentralized protection protocol where:
-1. **Operators deposit collateral**: Staking native `BOT` as a performance bond behind specified service commitments.
-2. **Customers purchase coverage**: Buying financial certainty against measurable failure conditions (missed deadlines, schema drift, downtime).
-3. **Evidence resolves outcomes**: Cryptographic evidence hashes settle claims objectively through an immutable on-chain lifecycle.
-
----
-
-## Target Network Configuration
-
-BONDAT is configured for **BOT Chain Mainnet**:
+## Live BOT Chain Mainnet Deployment
 
 | Parameter | Value |
 | :--- | :--- |
 | **Network Name** | BOT Chain Mainnet |
-| **Chain ID** | `677` (Hex: `0x2a5`) |
+| **Chain ID** | `677` (`0x2a5`) |
 | **RPC Endpoint** | `https://rpc.botchain.ai` |
 | **Native Currency** | `BOT` (18 decimals) |
+| **Contract Name** | `BondatCore` |
+| **Contract Address** | [`0xd5edd56DCe98f777C20435D7DafF9DAb70269FC6`](https://scan.botchain.ai/address/0xd5edd56DCe98f777C20435D7DafF9DAb70269FC6) |
+| **Deployment TX** | [`0x79ad87df9c63d575063c53a3c1daed865cfbf337695c4f7ba24d08ea2507bcbb`](https://scan.botchain.ai/tx/0x79ad87df9c63d575063c53a3c1daed865cfbf337695c4f7ba24d08ea2507bcbb) |
+| **Block Number** | `29778552` |
+| **Deployment Cost** | `0.03389636 BOT` (Strict Budget: `< 0.05 BOT` ✅) |
 | **Block Explorer** | [scan.botchain.ai](https://scan.botchain.ai) |
+
+---
+
+## Overview & Transaction Lifecycle
+
+As autonomous AI agents execute mission-critical tasks, service certainty becomes essential. **BONDAT** is an on-chain protection protocol where:
+
+```
+Register Agent → Deposit Collateral → Purchase Coverage → Execute Service → Submit Evidence → Validate Claim → Release Collateral or Compensate Customer
+```
+
+1. **Operator Staking (Performance Bond)**: AI agent operators register service commitments and lock native `BOT` collateral as a slashable performance bond.
+2. **Customer Coverage**: Service consumers purchase time-bound protection policies (standard 5% premium). The protocol reserves collateral 1:1 against the coverage amount.
+3. **Execution & Evidence**: Operators submit cryptographic evidence hashes before the deadline proving service completion.
+4. **Transparent Resolution**:
+   - **Objective Settlement**: Missed delivery claims without submitted evidence settle automatically on-chain with zero human intervention.
+   - **Subjective Disputes**: Disputed claims (invalid output, downtime) are evaluated by the designated arbitrator, strictly capped by the reserved coverage amount.
+   - **Collateral Release**: Satisfactory service delivery or unchallenged claim window expiration unlocks collateral back to the operator.
 
 ---
 
 ## Architecture & Codebase Structure
 
-The frontend is built with **React 18**, **TypeScript**, **Vite 7**, and **Tailwind CSS**, strictly adhering to the approved **AzioFlow-inspired** visual design:
-
 ```
 Bondat/
-├── public/                 # Static assets and icons
+├── contracts/
+│   └── BondatCore.sol      # Complete single-contract protocol backend
+├── test/
+│   └── BondatCore.t.sol    # Comprehensive Foundry test suite (22 tests + fuzzing)
 ├── src/
 │   ├── config/
-│   │   └── chain.ts        # Centralized network & contract configuration
+│   │   ├── chain.ts        # Centralized BOT Chain & deployed contract config
+│   │   └── abi.json        # Deployed BondatCore ABI
 │   ├── services/
 │   │   └── web3.ts         # Decoupled Web3 reads, writes & wallet provider
 │   ├── types/
 │   │   └── index.ts        # Route, Agent, Policy, and Claim types
 │   ├── App.tsx             # Main application & connected route views
 │   ├── index.css           # Preserved AzioFlow design system & responsive styling
-│   ├── main.tsx            # Entry point
-│   └── vite-env.d.ts       # Vite client types
+│   └── main.tsx            # Application entry point
+├── foundry.toml            # Foundry configuration (solc 0.8.24, via_ir = true)
 ├── index.html              # HTML shell with meta tags & favicon
-├── package.json            # Scripts & cleaned dependencies (zero unused packages)
+├── package.json            # Scripts & cleaned dependencies
 ├── tsconfig.json           # TypeScript configuration
-├── vite.config.ts          # Vite build configuration with alias support
-└── README.md               # Documentation
+├── CONTRACT_ARCHITECTURE.md# Complete smart contract specifications
+├── SECURITY.md             # Security model, invariants, and threat analysis
+├── DEPLOYMENT.md           # Mainnet deployment verification details
+├── GAS_REPORT.md           # Gas benchmarks & optimization report
+└── TEST_REPORT.md          # 100% passing test matrix & fuzz results
 ```
 
-### Key Engineering Principles
-- **Separation of Concerns**: All Web3 provider interactions, JSON-RPC queries, network switching, and contract dispatch logic are strictly isolated in `src/services/web3.ts` and `src/config/chain.ts`. UI components consume clean, typed APIs.
-- **Data Integrity (No Simulation)**: The application does not fabricate balances, transaction hashes, or fake agent records. Real-world empty states and explicit integration placeholders represent the live status honestly.
-- **Centralized Contract Management**: The contract address is explicitly unset (`null`) in `src/config/chain.ts` until the official deployment is finalized on BOT Chain Mainnet.
-- **Design System Fidelity**: Retains the authentic cream (`#eadacb`), charcoal (`#211f1d`), burnt-orange (`#873900`), and terracotta (`#b65d24`) palette, paired with DM Mono and Playfair Display typography.
-
 ---
 
-## Route Map & User Flows
+## Local Development & Testing
 
-The application features full hash-based routing with zero broken buttons:
-
-| Route | Page | Purpose |
-| :--- | :--- | :--- |
-| `/#/` | **Landing Page** | Protocol overview, lifecycle steps, category overview, and quick navigation. |
-| `/#/dashboard` | **Dashboard** | Operator & customer command center; live BOT balance from RPC, collateral metrics, and wallet state. |
-| `/#/agents` | **Agent Registry** | On-chain directory with category filters and full agent registration validation. |
-| `/#/agent-details` | **Agent Details** | Specification view displaying SLA parameters, failure triggers, and performance bond specs. |
-| `/#/marketplace` | **Marketplace** | Protection marketplace with dynamic fee calculation (5% premium, 1.5% protocol fee). |
-| `/#/coverage-details` | **Coverage Details** | Detailed breakdown of underwriting, 1:1 collateral lock, and claim window mechanics. |
-| `/#/claims` | **Claims Center** | Resolution layer with summary counters, empty state, and interactive claim submission form. |
-| `/#/docs` | **Documentation** | Comprehensive 8-part Bondat handbook with smooth-scrolling section navigation. |
-
----
-
-## Getting Started
-
-### Prerequisites
-- **Node.js**: v18.0.0 or higher (v24.x tested)
-- **npm**: v9.0.0 or higher (v11.x tested)
-
-### Installation
+### Smart Contract Development (Foundry)
 ```bash
-# Clone the repository
-git clone https://github.com/GoodnessTech/Bondat.git
-cd Bondat
+# Run all 22 tests with verbosity
+forge test -vv
 
+# Generate execution gas report
+forge test --gas-report
+
+# Check contract bytecode sizes
+forge build --sizes
+```
+
+### Frontend Development (Vite + React)
+```bash
 # Install dependencies
 npm install
-```
 
-### Available Scripts
-```bash
 # Start local development server
 npm run dev
 
@@ -107,44 +102,19 @@ npm run lint
 
 # Compile production build
 npm run build
-
-# Preview production build locally
-npm run preview
 ```
 
 ---
 
-## Smart Contract Integration Guide
+## Security Invariants & Guarantees
 
-When the Bondat smart contracts are deployed to BOT Chain Mainnet, update `src/config/chain.ts`:
-
-```typescript
-export const CONTRACT_CONFIG: ContractConfig = {
-  // Replace null with the verified mainnet contract address:
-  address: '0x...', 
-  status: 'DEPLOYED',
-  isDeployed: true,
-  deploymentNotes: 'Official Bondat core contract on BOT Chain Mainnet.',
-  protocolFeePercent: 1.5,
-  standardPremiumRatePercent: 5.0,
-};
-```
-
-All methods in `src/services/web3.ts` (`registerAgent`, `purchaseCoverage`, `submitClaim`) are prepared to dispatch directly against the contract ABI once this address is supplied.
-
----
-
-## Deployment (Vercel)
-
-1. **Framework Preset**: Vite
-2. **Root Directory**: `./`
-3. **Build Command**: `npm run build`
-4. **Output Directory**: `dist`
-5. **Node.js Version**: 18.x or 20.x
+1. **Collateral Conservation**: Available collateral always equals `totalCollateral - lockedCollateral`. An agent can NEVER withdraw collateral backing active coverage.
+2. **Bounded Payouts**: The arbitrator cannot approve a compensation payout greater than the policy's reserved coverage amount.
+3. **Non-Custodial Isolation**: Protocol revenue is strictly segregated and cannot deplete agent collateral.
+4. **Reentrancy Protection**: Single-slot reentrancy guard combined with Checks-Effects-Interactions (CEI) on all state transitions.
 
 ---
 
 ## License
 
-© 2026 Bondat Protocol. All rights reserved.
-
+© 2026 Bondat Protocol. Built on BOT Chain Mainnet.

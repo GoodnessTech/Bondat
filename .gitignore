@@ -43,3 +43,9 @@ Thumbs.db
 
 # Bolt & Generator artifacts
 .bolt
+
+
+# Foundry
+out
+cache
+broadcast
