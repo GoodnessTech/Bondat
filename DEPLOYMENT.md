@@ -56,3 +56,4 @@ cast call 0xd5edd56DCe98f777C20435D7DafF9DAb70269FC6 "premiumRateBps()(uint16)" 
 cast call 0xd5edd56DCe98f777C20435D7DafF9DAb70269FC6 "nextAgentId()(uint32)" --rpc-url https://rpc.botchain.ai
 # Output: 0
 ```
+

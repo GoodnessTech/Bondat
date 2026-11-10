@@ -120,3 +120,4 @@ struct Policy {
 | **Max Premium Rate** | 10.00% (`1000 bps`) |
 | **Initial Premium Rate**| 5.00% (`500 bps`) |
 | **Protocol Fee** | Built into premium structure |
+

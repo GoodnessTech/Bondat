@@ -48,3 +48,4 @@ Measured via Foundry test suite with `solc 0.8.24`, `optimizer = true`, `optimiz
    Eliminated redundant checks and transfer logic across multiple entry points.
 5. **Custom Errors**:
    Replaced verbose revert strings with 4-byte custom error selectors.
+

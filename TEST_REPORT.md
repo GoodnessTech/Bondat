@@ -51,3 +51,4 @@
   $$\text{payoutAmount} > \text{coverageAmount} \implies \text{revert PayoutExceedsCoverage()}$$
   Tested across 256 random combinations of coverage amounts and excess payout deltas.
   **Status**: 100% of illegal payouts successfully blocked.
+

@@ -49,3 +49,4 @@ The protocol guarantees the following strict invariant properties at all times:
 ### Non-Custodial Guarantee
 - If a claim is rejected, 100% of the reserved collateral returns to the operator's available balance.
 - If a claim is approved for a partial amount, the remainder is immediately released back to the operator.
+
