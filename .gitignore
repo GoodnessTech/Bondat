@@ -49,3 +49,5 @@ Thumbs.db
 out
 cache
 broadcast
+.wallets.json
+wallets*.json
